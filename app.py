@@ -4,6 +4,15 @@ import os
 import subprocess
 import re
 import json
+import sys
+
+def handler(event, context): 
+    cmd('./', "cp ./main.tf /tmp/")
+    cmd('/tmp/', "terraform init --upgrade")
+    result = cmd('/tmp/', "terraform plan")
+    last_result = extraction(result)
+    return last_result
+
 
 def logger(f):
     def wrapper(*args, **kwargs):
@@ -14,14 +23,17 @@ def logger(f):
         print(stderr.decode("utf-8"))
         if stderr == "":
             return stdout.decode("utf-8")
+            # return stdout
         else:
             return stdout.decode("utf-8")
+            # return stdout
     return wrapper
 
 @logger
 def cmd(path, command):
+    print('command')
+    print(command)
     os.chdir(path)
-# Popenの第1引数にコマンドを指定、第2/3引数で標準出力、標準エラーにパイプを第二引数、第三引数の指定によって繋ぐ
     result = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = result.communicate() # 標準出力、標準エラーの取得
     return (stdout, stderr)
@@ -29,14 +41,19 @@ def cmd(path, command):
 
 def extraction(plan):
     print(plan)
+    change_state = {'add': 0, 'change': 0, 'destroy': 0}
     if "No changes" in plan:
-        line_extraction = re.findall("No changes.*", plan) #検索してマッチした行をリストで返す
-        result = "".join(line_extraction) #リストをstrにしてる
-        return result
+        return change_state
     elif "Plan" in plan:
         line_extraction = re.findall("Plan.*", plan)
         result = "".join(line_extraction)
-        return result
+        
+        change_state['add'] = int(re.findall('(\d)\sto\sadd', result)[0])
+        change_state['change'] = int(re.findall('(\d)\sto\schange', result)[0])
+        change_state['destroy'] = int(re.findall('(\d)\sto\sdestroy', result)[0])
+        print("add, change, destroy")
+        print(change_state)
+        return change_state
     elif "Error" in plan:
         line_extraction = re.findall("Error.*", plan)
         result = "".join(line_extraction)
@@ -44,20 +61,3 @@ def extraction(plan):
     else:
         result = "予期せぬエラーです。ログを確認して下さい。"
         return result
-
-
-def main():
-    # `terraform init --upgrade` で初期化とprovider versionのアップデート
-    # cmd('./', "terraform init --upgrade")
-    # terraform planの結果を格納
-    result = cmd('./', "terraform plan")
-    # print("result")
-    # print(result)
-    # 結果をextraction関数で判定してdictに格納
-    last_result = extraction(result)
-    print('last_result')
-    print(last_result)
-
-
-if __name__ == "__main__":
-    main()
